@@ -6,7 +6,8 @@
   "main": "server.js",
   "scripts": {
     "dev": "nodemon server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "vitest run"
   },
   "dependencies": {
     "@cacheable/node-cache": "^2.0.1",
@@ -18,7 +19,8 @@
     "morgan": "^1.10.1"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14"
+    "nodemon": "^3.1.14",
+    "vitest": "^4.1.4"
   },
   "engines": {
     "node": ">=18"

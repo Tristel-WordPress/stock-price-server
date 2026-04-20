@@ -10,144 +10,135 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const CACHE_TTL = parseInt(process.env.CACHE_TTL || "30", 10);
+const RATE_LIMIT_WINDOW_MS = parseInt(process.env.RATE_LIMIT_WINDOW_MS || "60000", 10);
+const RATE_LIMIT_MAX = parseInt(process.env.RATE_LIMIT_MAX || "30", 10);
 
-// Cache (30s TTL)
-const cache = new NodeCache({ stdTTL: 30, checkperiod: 60 });
+export const cache = new NodeCache({ stdTTL: CACHE_TTL, checkperiod: CACHE_TTL * 2 });
 
 // Middleware
 app.use(helmet());
 app.use(
 	cors({
-		origin: process.env.CORS_ORIGIN?.split(",") || "*"
+		origin: process.env.CORS_ORIGIN?.split(",") || "http://localhost:3001"
 	})
 );
-app.use(express.json());
-app.use(morgan("combined"));
+app.use(express.json({ limit: "10kb" }));
+app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 
 // Rate limiting
-const limiter = rateLimit({
-	windowMs: 60 * 1000,
-	limit: 30,
-	standardHeaders: true,
-	legacyHeaders: false
-});
-
-app.use("/api/", limiter);
+app.use(
+	"/api/",
+	rateLimit({
+		windowMs: RATE_LIMIT_WINDOW_MS,
+		limit: RATE_LIMIT_MAX,
+		standardHeaders: true,
+		legacyHeaders: false
+	})
+);
 
 /**
- * LSE STOCK (TSTL)
+ * Fetches a stock price from Twelve Data with caching.
+ * @param {{ symbol: string, apiSymbol: string, exchange: string, currency: string }} opts
  */
-app.get("/api/stock-price", async (_req, res) => {
-	try {
-		const cacheKey = "stock:TSTL";
-		const cached = cache.get(cacheKey);
+export async function fetchStockPrice({ symbol, apiSymbol, exchange, currency }) {
+	const cacheKey = `stock:${symbol}`;
+	const cached = cache.get(cacheKey);
 
-		if (cached) {
-			return res.json({ ...cached, cached: true });
-		}
-
-		const apiKey = process.env.TWELVE_DATA_API_KEY;
-
-		if (!apiKey) {
-			return res.status(500).json({ error: "Missing TWELVE_DATA_API_KEY" });
-		}
-
-		const url = `https://api.twelvedata.com/price?symbol=TSTL.LON&apikey=${apiKey}`;
-		console.log("Requesting LSE price...");
-
-		const response = await fetch(url);
-		const data = await response.json();
-
-		if (!response.ok || data.status === "error") {
-			return res.status(502).json({
-				error: data.message || "Failed to fetch stock price",
-				raw: data
-			});
-		}
-
-		const payload = {
-			symbol: "TSTL",
-			exchange: "LSE",
-			price: Number(data.price),
-			currency: "GBP"
-		};
-
-		cache.set(cacheKey, payload);
-
-		return res.json({ ...payload, cached: false });
-	} catch (error) {
-		console.error("LSE fetch error:", error);
-		console.error("Cause:", error?.cause);
-
-		return res.status(500).json({
-			error: error.message || "Server error",
-			cause: error?.cause?.message || null,
-			code: error?.cause?.code || null
-		});
+	if (cached) {
+		return { ...cached, cached: true };
 	}
-});
+
+	const apiKey = process.env.TWELVE_DATA_API_KEY;
+
+	if (!apiKey) {
+		const err = new Error("Missing TWELVE_DATA_API_KEY");
+		err.status = 500;
+		throw err;
+	}
+
+	const controller = new AbortController();
+	const timeout = setTimeout(() => controller.abort(), 5000);
+
+	let response, data;
+	try {
+		response = await fetch(
+			`https://api.twelvedata.com/price?symbol=${apiSymbol}&apikey=${apiKey}`,
+			{ signal: controller.signal }
+		);
+		data = await response.json();
+	} finally {
+		clearTimeout(timeout);
+	}
+
+	if (!response.ok || data.status === "error") {
+		console.error(`Upstream error for ${symbol}:`, data);
+		const err = new Error(data.message || "Failed to fetch stock price");
+		err.status = 502;
+		throw err;
+	}
+
+	const price = Number(data.price);
+	if (!data.price || isNaN(price)) {
+		const err = new Error("Invalid price received from upstream API");
+		err.status = 502;
+		throw err;
+	}
+
+	const payload = { symbol, exchange, price, currency };
+	cache.set(cacheKey, payload);
+	return { ...payload, cached: false };
+}
+
+// Route handler helper
+function stockHandler(opts) {
+	return async (_req, res) => {
+		try {
+			const result = await fetchStockPrice(opts);
+			return res.json(result);
+		} catch (error) {
+			console.error(`Stock fetch error [${opts.symbol}]:`, error.message);
+			return res.status(error.status || 500).json({ error: error.message || "Server error" });
+		}
+	};
+}
 
 /**
- * TEST ENDPOINT (NVDA)
+ * LSE stock: TSTL
  */
-app.get("/api/test", async (_req, res) => {
-	try {
-		const cacheKey = "stock:NVDA";
-		const cached = cache.get(cacheKey);
-
-		if (cached) {
-			return res.json({ ...cached, cached: true });
-		}
-
-		const apiKey = process.env.TWELVE_DATA_API_KEY;
-
-		if (!apiKey) {
-			return res.status(500).json({ error: "Missing TWELVE_DATA_API_KEY" });
-		}
-
-		const url = `https://api.twelvedata.com/price?symbol=NVDA&apikey=${apiKey}`;
-		console.log("Requesting NVDA test price...");
-
-		const response = await fetch(url);
-		const data = await response.json();
-
-		if (!response.ok || data.status === "error") {
-			return res.status(502).json({
-				error: data.message || "Failed to fetch NVDA price",
-				raw: data
-			});
-		}
-
-		const payload = {
-			symbol: "NVDA",
-			exchange: "NASDAQ",
-			price: Number(data.price),
-			currency: "USD"
-		};
-
-		cache.set(cacheKey, payload);
-
-		return res.json({ ...payload, cached: false });
-	} catch (error) {
-		console.error("Test fetch error:", error);
-		console.error("Cause:", error?.cause);
-
-		return res.status(500).json({
-			error: error.message || "Server error",
-			cause: error?.cause?.message || null,
-			code: error?.cause?.code || null
-		});
-	}
-});
+app.get("/api/v1/stock-price", stockHandler({
+	symbol: "TSTL",
+	apiSymbol: "TSTL.LON",
+	exchange: "LSE",
+	currency: "GBP"
+}));
 
 /**
- * HEALTH CHECK
+ * Test endpoint: NVDA (NASDAQ)
+ */
+app.get("/api/v1/test", stockHandler({
+	symbol: "NVDA",
+	apiSymbol: "NVDA",
+	exchange: "NASDAQ",
+	currency: "USD"
+}));
+
+/**
+ * Health check
  */
 app.get("/health", (_req, res) => {
-	res.json({ ok: true });
+	res.json({ ok: true, uptime: process.uptime(), cacheKeys: cache.keys().length });
 });
 
-// Start server
-app.listen(PORT, () => {
+// Graceful shutdown
+const server = app.listen(PORT, () => {
 	console.log(`Server running on http://localhost:${PORT}`);
 });
+
+const shutdown = () => {
+	server.close(() => process.exit(0));
+};
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);
+
+export default app;
