@@ -10,7 +10,7 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const CACHE_TTL = parseInt(process.env.CACHE_TTL || "30", 10);
+const CACHE_TTL = parseInt(process.env.CACHE_TTL || "3600", 10);
 const RATE_LIMIT_WINDOW_MS = parseInt(process.env.RATE_LIMIT_WINDOW_MS || "60000", 10);
 const RATE_LIMIT_MAX = parseInt(process.env.RATE_LIMIT_MAX || "30", 10);
 
