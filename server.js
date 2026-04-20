@@ -16,6 +16,11 @@ const RATE_LIMIT_MAX = parseInt(process.env.RATE_LIMIT_MAX || "30", 10);
 
 export const cache = new NodeCache({ stdTTL: CACHE_TTL, checkperiod: CACHE_TTL * 2 });
 
+
+if (process.env.NODE_ENV !== 'production') {
+	process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '0';
+}
+
 // Middleware
 app.use(helmet());
 app.use(
