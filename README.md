@@ -34,9 +34,14 @@ Returns server health and basic stats.
 ### `GET /api/v1/stock-price`
 Returns the current price for **TSTL** (Tissue Regenix, LSE).
 ```json
-{ "symbol": "TSTL", "exchange": "LSE", "price": 12.50, "currency": "GBP", "cached": false }
+{
+  "symbol": "TSTL",
+  "exchange": "LSE",
+  "price": 387.5,
+  "currency": "GBP",
+  "cached": false
+}
 ```
-
 ### `GET /api/v1/test`
 Returns the current price for **NVDA** (NVIDIA, NASDAQ).
 ```json
