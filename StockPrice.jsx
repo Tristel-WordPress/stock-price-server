@@ -1,17 +1,66 @@
 import { useState, useEffect, useCallback } from "react";
 
 const CURRENCY_SYMBOLS = { GBP: "£", USD: "$", EUR: "€" };
+const MAX_HISTORY = 20;
 
 function formatPrice(price, currency) {
   const symbol = CURRENCY_SYMBOLS[currency] ?? currency;
   return `${symbol}${price.toFixed(2)}`;
 }
 
-export default function StockPrice({ apiUrl = "/api/v1/stock-price", refreshInterval = 0 }) {
+function DeltaIndicator({ delta, deltaPct }) {
+  if (delta === null) return null;
+  const isUp = delta > 0, isDown = delta < 0;
+  const color = isUp ? "#16a34a" : isDown ? "#dc2626" : "#64748b";
+  const arrow = isUp ? "▲" : isDown ? "▼" : "—";
+  const sign = isUp ? "+" : "";
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "6px",
+                  fontSize: "13px", fontWeight: 600, color, marginBottom: "8px" }}>
+      <span>{arrow}</span>
+      <span>{sign}{delta.toFixed(2)}</span>
+      <span style={{ fontWeight: 400 }}>({sign}{deltaPct.toFixed(2)}%)</span>
+    </div>
+  );
+}
+
+function buildPolylinePoints(prices, width, height, padding) {
+  if (prices.length < 2) return "";
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  const range = max - min || 1;
+  const usableW = width - padding * 2;
+  const usableH = height - padding * 2;
+  return prices
+    .map((p, i) => {
+      const x = padding + (i / (prices.length - 1)) * usableW;
+      const y = padding + (1 - (p - min) / range) * usableH;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+}
+
+function Sparkline({ prices, width = 280, height = 48, padding = 4 }) {
+  if (!prices || prices.length < 2) return null;
+  const points = buildPolylinePoints(prices, width, height, padding);
+  const lineColor = prices[prices.length - 1] >= prices[0] ? "#16a34a" : "#dc2626";
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}
+         style={{ display: "block", overflow: "visible", marginTop: "12px", marginBottom: "4px" }}
+         aria-hidden="true">
+      <polyline points={points} fill="none" stroke={lineColor}
+                strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export default function StockPrice({ apiUrl = "/api/v1/stock-price", refreshInterval = 0, label = "Stock Price" }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [prevPrice, setPrevPrice] = useState(null);
+  const [priceHistory, setPriceHistory] = useState([]);
 
   const fetchPrice = useCallback(async () => {
     try {
@@ -22,7 +71,11 @@ export default function StockPrice({ apiUrl = "/api/v1/stock-price", refreshInte
         throw new Error(body.error || `Request failed (${res.status})`);
       }
       const json = await res.json();
-      setData(json);
+      setData(prev => {
+        if (prev !== null) setPrevPrice(prev.price);
+        return json;
+      });
+      setPriceHistory(h => [...h.slice(-(MAX_HISTORY - 1)), json.price]);
       setLastUpdated(new Date());
     } catch (err) {
       setError(err.message);
@@ -39,10 +92,13 @@ export default function StockPrice({ apiUrl = "/api/v1/stock-price", refreshInte
     }
   }, [fetchPrice, refreshInterval]);
 
+  const delta = prevPrice !== null && data ? data.price - prevPrice : null;
+  const deltaPct = delta !== null ? (delta / prevPrice) * 100 : null;
+
   return (
     <div style={styles.card}>
       <div style={styles.header}>
-        <span style={styles.title}>Stock Price</span>
+        <span style={styles.title}>{label}</span>
         <button onClick={fetchPrice} style={styles.refreshBtn} aria-label="Refresh">
           &#x21bb;
         </button>
@@ -64,11 +120,13 @@ export default function StockPrice({ apiUrl = "/api/v1/stock-price", refreshInte
             <span style={styles.symbol}>{data.symbol}</span>
             <span style={styles.price}>{formatPrice(data.price, data.currency)}</span>
           </div>
+          <DeltaIndicator delta={delta} deltaPct={deltaPct} />
           <div style={styles.meta}>
             <span style={styles.badge}>{data.exchange}</span>
             <span style={styles.badge}>{data.currency}</span>
             {data.cached && <span style={{ ...styles.badge, ...styles.cachedBadge }}>Cached</span>}
           </div>
+          <Sparkline prices={priceHistory} width={272} />
           {lastUpdated && (
             <p style={styles.timestamp}>
               Updated {lastUpdated.toLocaleTimeString()}
@@ -166,3 +224,15 @@ const styles = {
     padding: "8px 12px",
   },
 };
+
+export function StockPriceList({ stocks = [], refreshInterval = 0 }) {
+  if (!stocks.length) return null;
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", alignItems: "flex-start" }}>
+      {stocks.map((cfg, i) => (
+        <StockPrice key={cfg.apiUrl + i} apiUrl={cfg.apiUrl}
+                    label={cfg.label} refreshInterval={refreshInterval} />
+      ))}
+    </div>
+  );
+}
