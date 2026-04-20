@@ -54,6 +54,7 @@ export async function fetchStockPrice({ symbol, apiSymbol, exchange, currency })
 	if (!apiKey) {
 		const err = new Error("Missing TWELVE_DATA_API_KEY");
 		err.status = 500;
+		err.code = "MISSING_API_KEY";
 		throw err;
 	}
 
@@ -67,14 +68,27 @@ export async function fetchStockPrice({ symbol, apiSymbol, exchange, currency })
 			{ signal: controller.signal }
 		);
 		data = await response.json();
+	} catch (error) {
+		if (error.name === "AbortError") {
+			const err = new Error(`Upstream API request timed out for ${symbol}`);
+			err.status = 504;
+			err.code = "TIMEOUT";
+			throw err;
+		}
+		const err = new Error(`Network error fetching ${symbol}: ${error.cause?.message ?? error.message}`);
+		err.status = 502;
+		err.code = "NETWORK_ERROR";
+		throw err;
 	} finally {
 		clearTimeout(timeout);
 	}
 
 	if (!response.ok || data.status === "error") {
 		console.error(`Upstream error for ${symbol}:`, data);
-		const err = new Error(data.message || "Failed to fetch stock price");
+		const err = new Error(data.message || "Upstream API returned an error");
 		err.status = 502;
+		err.code = "UPSTREAM_ERROR";
+		err.upstream = { code: data.code, status: data.status };
 		throw err;
 	}
 
@@ -82,6 +96,7 @@ export async function fetchStockPrice({ symbol, apiSymbol, exchange, currency })
 	if (!data.price || isNaN(price)) {
 		const err = new Error("Invalid price received from upstream API");
 		err.status = 502;
+		err.code = "INVALID_PRICE";
 		throw err;
 	}
 
@@ -97,8 +112,14 @@ function stockHandler(opts) {
 			const result = await fetchStockPrice(opts);
 			return res.json(result);
 		} catch (error) {
-			console.error(`Stock fetch error [${opts.symbol}]:`, error.message);
-			return res.status(error.status || 500).json({ error: error.message || "Server error" });
+			console.error(`Stock fetch error [${opts.symbol}]:`, error.message, { code: error.code, upstream: error.upstream });
+			const body = {
+				error: error.message || "Server error",
+				code: error.code || "INTERNAL_ERROR",
+				symbol: opts.symbol,
+				...(error.upstream && { upstream: error.upstream })
+			};
+			return res.status(error.status || 500).json(body);
 		}
 	};
 }
@@ -108,7 +129,7 @@ function stockHandler(opts) {
  */
 app.get("/api/v1/stock-price", stockHandler({
 	symbol: "TSTL",
-	apiSymbol: "TSTL.LON",
+	apiSymbol: "TSTL:LSE",
 	exchange: "LSE",
 	currency: "GBP"
 }));
