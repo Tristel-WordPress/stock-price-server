@@ -30,7 +30,7 @@ describe("fetchStockPrice", () => {
 
 		const result = await fetchStockPrice({
 			symbol: "TSTL",
-			apiSymbol: "TSTL.LON",
+			apiSymbol: "TSTL:LSE",
 			exchange: "LSE",
 			currency: "GBP"
 		});
@@ -41,8 +41,8 @@ describe("fetchStockPrice", () => {
 	it("returns cached result on second call", async () => {
 		mockFetch.mockResolvedValueOnce(makeFetchResponse({ price: "99.00" }));
 
-		await fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL.LON", exchange: "LSE", currency: "GBP" });
-		const result = await fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL.LON", exchange: "LSE", currency: "GBP" });
+		await fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL:LSE", exchange: "LSE", currency: "GBP" });
+		const result = await fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL:LSE", exchange: "LSE", currency: "GBP" });
 
 		expect(result.cached).toBe(true);
 		expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -52,7 +52,7 @@ describe("fetchStockPrice", () => {
 		delete process.env.TWELVE_DATA_API_KEY;
 
 		await expect(
-			fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL.LON", exchange: "LSE", currency: "GBP" })
+			fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL:LSE", exchange: "LSE", currency: "GBP" })
 		).rejects.toMatchObject({ message: "Missing TWELVE_DATA_API_KEY", status: 500 });
 	});
 
@@ -62,7 +62,7 @@ describe("fetchStockPrice", () => {
 		);
 
 		await expect(
-			fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL.LON", exchange: "LSE", currency: "GBP" })
+			fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL:LSE", exchange: "LSE", currency: "GBP" })
 		).rejects.toMatchObject({ status: 502 });
 	});
 
@@ -70,7 +70,27 @@ describe("fetchStockPrice", () => {
 		mockFetch.mockResolvedValueOnce(makeFetchResponse({ price: null }));
 
 		await expect(
-			fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL.LON", exchange: "LSE", currency: "GBP" })
+			fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL:LSE", exchange: "LSE", currency: "GBP" })
 		).rejects.toMatchObject({ status: 502 });
+	});
+
+	it("throws 504 on request timeout", async () => {
+		const abortError = new DOMException("The operation was aborted", "AbortError");
+		mockFetch.mockRejectedValueOnce(abortError);
+
+		await expect(
+			fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL:LSE", exchange: "LSE", currency: "GBP" })
+		).rejects.toMatchObject({ status: 504, message: expect.stringContaining("timed out") });
+	});
+
+	it("throws 502 on network error", async () => {
+		const networkError = Object.assign(new TypeError("fetch failed"), {
+			cause: new Error("ECONNREFUSED")
+		});
+		mockFetch.mockRejectedValueOnce(networkError);
+
+		await expect(
+			fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL:LSE", exchange: "LSE", currency: "GBP" })
+		).rejects.toMatchObject({ status: 502, message: expect.stringContaining("Network error") });
 	});
 });

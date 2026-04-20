@@ -67,6 +67,15 @@ export async function fetchStockPrice({ symbol, apiSymbol, exchange, currency })
 			{ signal: controller.signal }
 		);
 		data = await response.json();
+	} catch (error) {
+		if (error.name === "AbortError") {
+			const err = new Error(`Upstream API request timed out for ${symbol}`);
+			err.status = 504;
+			throw err;
+		}
+		const err = new Error(`Network error fetching ${symbol}: ${error.cause?.message ?? error.message}`);
+		err.status = 502;
+		throw err;
 	} finally {
 		clearTimeout(timeout);
 	}
@@ -108,7 +117,7 @@ function stockHandler(opts) {
  */
 app.get("/api/v1/stock-price", stockHandler({
 	symbol: "TSTL",
-	apiSymbol: "TSTL.LON",
+	apiSymbol: "TSTL:LSE",
 	exchange: "LSE",
 	currency: "GBP"
 }));
