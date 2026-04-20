@@ -48,42 +48,42 @@ describe("fetchStockPrice", () => {
 		expect(mockFetch).toHaveBeenCalledTimes(1);
 	});
 
-	it("throws 500 when API key is missing", async () => {
+	it("throws 500 with MISSING_API_KEY code when API key is missing", async () => {
 		delete process.env.TWELVE_DATA_API_KEY;
 
 		await expect(
 			fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL:LSE", exchange: "LSE", currency: "GBP" })
-		).rejects.toMatchObject({ message: "Missing TWELVE_DATA_API_KEY", status: 500 });
+		).rejects.toMatchObject({ message: "Missing TWELVE_DATA_API_KEY", status: 500, code: "MISSING_API_KEY" });
 	});
 
-	it("throws 502 when upstream returns error status", async () => {
+	it("throws 502 with UPSTREAM_ERROR code and upstream details when API returns error", async () => {
 		mockFetch.mockResolvedValueOnce(
-			makeFetchResponse({ status: "error", message: "Invalid API key" }, false)
+			makeFetchResponse({ status: "error", code: 401, message: "Invalid API key" }, false)
 		);
 
 		await expect(
 			fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL:LSE", exchange: "LSE", currency: "GBP" })
-		).rejects.toMatchObject({ status: 502 });
+		).rejects.toMatchObject({ status: 502, code: "UPSTREAM_ERROR", upstream: { code: 401, status: "error" } });
 	});
 
-	it("throws 502 when price is missing from response", async () => {
+	it("throws 502 with INVALID_PRICE code when price is missing from response", async () => {
 		mockFetch.mockResolvedValueOnce(makeFetchResponse({ price: null }));
 
 		await expect(
 			fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL:LSE", exchange: "LSE", currency: "GBP" })
-		).rejects.toMatchObject({ status: 502 });
+		).rejects.toMatchObject({ status: 502, code: "INVALID_PRICE" });
 	});
 
-	it("throws 504 on request timeout", async () => {
+	it("throws 504 with TIMEOUT code on request timeout", async () => {
 		const abortError = new DOMException("The operation was aborted", "AbortError");
 		mockFetch.mockRejectedValueOnce(abortError);
 
 		await expect(
 			fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL:LSE", exchange: "LSE", currency: "GBP" })
-		).rejects.toMatchObject({ status: 504, message: expect.stringContaining("timed out") });
+		).rejects.toMatchObject({ status: 504, code: "TIMEOUT", message: expect.stringContaining("timed out") });
 	});
 
-	it("throws 502 on network error", async () => {
+	it("throws 502 with NETWORK_ERROR code on network failure", async () => {
 		const networkError = Object.assign(new TypeError("fetch failed"), {
 			cause: new Error("ECONNREFUSED")
 		});
@@ -91,6 +91,6 @@ describe("fetchStockPrice", () => {
 
 		await expect(
 			fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL:LSE", exchange: "LSE", currency: "GBP" })
-		).rejects.toMatchObject({ status: 502, message: expect.stringContaining("Network error") });
+		).rejects.toMatchObject({ status: 502, code: "NETWORK_ERROR", message: expect.stringContaining("Network error") });
 	});
 });
