@@ -15,6 +15,7 @@ const RATE_LIMIT_WINDOW_MS = parseInt(process.env.RATE_LIMIT_WINDOW_MS || "60000
 const RATE_LIMIT_MAX = parseInt(process.env.RATE_LIMIT_MAX || "30", 10);
 
 export const cache = new NodeCache({ stdTTL: CACHE_TTL, checkperiod: CACHE_TTL * 2 });
+export const previousPrices = new Map();
 
 
 if (process.env.NODE_ENV !== 'production') {
@@ -105,7 +106,13 @@ export async function fetchStockPrice({ symbol, apiSymbol, exchange, currency })
 		throw err;
 	}
 
-	const payload = { symbol, exchange, price, currency };
+	const previousPrice = previousPrices.get(symbol) ?? null;
+	const change = previousPrice !== null ? price - previousPrice : null;
+	const changePercent = change !== null ? (change / previousPrice) * 100 : null;
+	const direction = change === null ? null : change > 0 ? "up" : change < 0 ? "down" : "flat";
+	previousPrices.set(symbol, price);
+
+	const payload = { symbol, exchange, price, currency, previousPrice, change, changePercent, direction };
 	cache.set(cacheKey, payload);
 	return { ...payload, cached: false };
 }
