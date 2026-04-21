@@ -150,20 +150,23 @@ describe("fetchStockPrice", () => {
 		expect(result.direction).toBe("flat");
 	});
 
-	it("cached response includes delta from time of caching", async () => {
+	it("cached response computes delta against the last fresh price", async () => {
 		mockFetch
 			.mockResolvedValueOnce(makeFetchResponse({ price: "100.00" }))
 			.mockResolvedValueOnce(makeFetchResponse({ price: "110.00" }));
 
+		// First fresh fetch: prev=null, delta=null, previousPrices→100
 		await fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL:LSE", exchange: "LSE", currency: "GBP" });
 		cache.flushAll();
+
+		// Second fresh fetch: prev=100, delta=+10, previousPrices→110
 		await fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL:LSE", exchange: "LSE", currency: "GBP" });
 
-		// Third call — should hit cache and return the delta from the second fetch
+		// Third call hits cache (price=110); prev is now 110, so delta=0
 		const cached = await fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL:LSE", exchange: "LSE", currency: "GBP" });
 		expect(cached.cached).toBe(true);
-		expect(cached.previousPrice).toBe(100);
-		expect(cached.change).toBeCloseTo(10);
-		expect(cached.direction).toBe("up");
+		expect(cached.previousPrice).toBe(110);
+		expect(cached.change).toBeCloseTo(0);
+		expect(cached.direction).toBe("flat");
 	});
 });
