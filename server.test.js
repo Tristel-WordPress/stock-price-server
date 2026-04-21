@@ -5,7 +5,7 @@ const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 
 // Import after stubbing fetch
-const { fetchStockPrice, cache, previousPrices } = await import("./server.js");
+const { fetchStockPrice, cache } = await import("./server.js");
 
 function makeFetchResponse(body, ok = true) {
 	return {
@@ -14,11 +14,19 @@ function makeFetchResponse(body, ok = true) {
 	};
 }
 
+function makeQuoteResponse(close, change, percentChange, previousClose) {
+	return makeFetchResponse({
+		close: String(close),
+		change: String(change),
+		percent_change: String(percentChange),
+		previous_close: String(previousClose)
+	});
+}
+
 describe("fetchStockPrice", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		cache.flushAll();
-		previousPrices.clear();
 		process.env.TWELVE_DATA_API_KEY = "test-key";
 	});
 
@@ -27,7 +35,7 @@ describe("fetchStockPrice", () => {
 	});
 
 	it("returns price data from upstream API", async () => {
-		mockFetch.mockResolvedValueOnce(makeFetchResponse({ price: "123.45" }));
+		mockFetch.mockResolvedValueOnce(makeQuoteResponse("123.45", "0.50", "0.41", "122.95"));
 
 		const result = await fetchStockPrice({
 			symbol: "TSTL",
@@ -38,12 +46,23 @@ describe("fetchStockPrice", () => {
 
 		expect(result).toEqual({
 			symbol: "TSTL", exchange: "LSE", price: 123.45, currency: "GBP", cached: false,
-			previousPrice: null, change: null, changePercent: null, direction: null
+			previousPrice: 122.95, change: 0.50, changePercent: 0.41, direction: "up"
 		});
 	});
 
+	it("calls the /quote endpoint", async () => {
+		mockFetch.mockResolvedValueOnce(makeQuoteResponse("99.00", "1.00", "1.02", "98.00"));
+
+		await fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL:LSE", exchange: "LSE", currency: "GBP" });
+
+		expect(mockFetch).toHaveBeenCalledWith(
+			expect.stringContaining("twelvedata.com/quote"),
+			expect.anything()
+		);
+	});
+
 	it("returns cached result on second call", async () => {
-		mockFetch.mockResolvedValueOnce(makeFetchResponse({ price: "99.00" }));
+		mockFetch.mockResolvedValueOnce(makeQuoteResponse("99.00", "1.00", "1.02", "98.00"));
 
 		await fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL:LSE", exchange: "LSE", currency: "GBP" });
 		const result = await fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL:LSE", exchange: "LSE", currency: "GBP" });
@@ -71,7 +90,7 @@ describe("fetchStockPrice", () => {
 	});
 
 	it("throws 502 with INVALID_PRICE code when price is missing from response", async () => {
-		mockFetch.mockResolvedValueOnce(makeFetchResponse({ price: null }));
+		mockFetch.mockResolvedValueOnce(makeFetchResponse({ close: null }));
 
 		await expect(
 			fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL:LSE", exchange: "LSE", currency: "GBP" })
@@ -98,24 +117,9 @@ describe("fetchStockPrice", () => {
 		).rejects.toMatchObject({ status: 502, code: "NETWORK_ERROR", message: expect.stringContaining("Network error") });
 	});
 
-	it("returns null change fields on first fetch for a symbol", async () => {
-		mockFetch.mockResolvedValueOnce(makeFetchResponse({ price: "100.00" }));
+	it("returns delta fields sourced from the API response", async () => {
+		mockFetch.mockResolvedValueOnce(makeQuoteResponse("105.00", "5.00", "5.00", "100.00"));
 
-		const result = await fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL:LSE", exchange: "LSE", currency: "GBP" });
-
-		expect(result.previousPrice).toBeNull();
-		expect(result.change).toBeNull();
-		expect(result.changePercent).toBeNull();
-		expect(result.direction).toBeNull();
-	});
-
-	it("returns correct delta fields on second fresh fetch", async () => {
-		mockFetch
-			.mockResolvedValueOnce(makeFetchResponse({ price: "100.00" }))
-			.mockResolvedValueOnce(makeFetchResponse({ price: "105.00" }));
-
-		await fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL:LSE", exchange: "LSE", currency: "GBP" });
-		cache.flushAll();
 		const result = await fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL:LSE", exchange: "LSE", currency: "GBP" });
 
 		expect(result.previousPrice).toBe(100);
@@ -124,49 +128,44 @@ describe("fetchStockPrice", () => {
 		expect(result.direction).toBe("up");
 	});
 
-	it("sets direction to down when price falls", async () => {
-		mockFetch
-			.mockResolvedValueOnce(makeFetchResponse({ price: "200.00" }))
-			.mockResolvedValueOnce(makeFetchResponse({ price: "190.00" }));
+	it("sets direction to down when change is negative", async () => {
+		mockFetch.mockResolvedValueOnce(makeQuoteResponse("190.00", "-10.00", "-5.00", "200.00"));
 
-		await fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL:LSE", exchange: "LSE", currency: "GBP" });
-		cache.flushAll();
 		const result = await fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL:LSE", exchange: "LSE", currency: "GBP" });
 
 		expect(result.change).toBeCloseTo(-10);
 		expect(result.direction).toBe("down");
 	});
 
-	it("sets direction to flat when price is unchanged", async () => {
-		mockFetch
-			.mockResolvedValueOnce(makeFetchResponse({ price: "150.00" }))
-			.mockResolvedValueOnce(makeFetchResponse({ price: "150.00" }));
+	it("sets direction to flat when change is zero", async () => {
+		mockFetch.mockResolvedValueOnce(makeQuoteResponse("150.00", "0.00", "0.00", "150.00"));
 
-		await fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL:LSE", exchange: "LSE", currency: "GBP" });
-		cache.flushAll();
 		const result = await fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL:LSE", exchange: "LSE", currency: "GBP" });
 
 		expect(result.change).toBe(0);
 		expect(result.direction).toBe("flat");
 	});
 
-	it("cached response computes delta against the last fresh price", async () => {
-		mockFetch
-			.mockResolvedValueOnce(makeFetchResponse({ price: "100.00" }))
-			.mockResolvedValueOnce(makeFetchResponse({ price: "110.00" }));
+	it("cached response returns same delta as the original fetch", async () => {
+		mockFetch.mockResolvedValueOnce(makeQuoteResponse("110.00", "10.00", "10.00", "100.00"));
 
-		// First fresh fetch: prev=null, delta=null, previousPrices→100
 		await fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL:LSE", exchange: "LSE", currency: "GBP" });
-		cache.flushAll();
-
-		// Second fresh fetch: prev=100, delta=+10, previousPrices→110
-		await fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL:LSE", exchange: "LSE", currency: "GBP" });
-
-		// Third call hits cache (price=110); prev is now 110, so delta=0
 		const cached = await fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL:LSE", exchange: "LSE", currency: "GBP" });
+
 		expect(cached.cached).toBe(true);
-		expect(cached.previousPrice).toBe(110);
-		expect(cached.change).toBeCloseTo(0);
-		expect(cached.direction).toBe("flat");
+		expect(cached.previousPrice).toBe(100);
+		expect(cached.change).toBeCloseTo(10);
+		expect(cached.direction).toBe("up");
+	});
+
+	it("returns null delta fields when API omits change data", async () => {
+		mockFetch.mockResolvedValueOnce(makeFetchResponse({ close: "123.45" }));
+
+		const result = await fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL:LSE", exchange: "LSE", currency: "GBP" });
+
+		expect(result.previousPrice).toBeNull();
+		expect(result.change).toBeNull();
+		expect(result.changePercent).toBeNull();
+		expect(result.direction).toBeNull();
 	});
 });

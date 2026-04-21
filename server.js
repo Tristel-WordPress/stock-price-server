@@ -15,8 +15,6 @@ const RATE_LIMIT_WINDOW_MS = parseInt(process.env.RATE_LIMIT_WINDOW_MS || "60000
 const RATE_LIMIT_MAX = parseInt(process.env.RATE_LIMIT_MAX || "30", 10);
 
 export const cache = new NodeCache({ stdTTL: CACHE_TTL, checkperiod: CACHE_TTL * 2 });
-export const previousPrices = new Map();
-
 
 if (process.env.NODE_ENV !== 'production') {
 	process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '0';
@@ -51,17 +49,8 @@ export async function fetchStockPrice({ symbol, apiSymbol, exchange, currency })
 	const cacheKey = `stock:${symbol}`;
 	const cached = cache.get(cacheKey);
 
-	const previousPrice = previousPrices.get(symbol) ?? null;
-
-	function buildDelta(price) {
-		const change = previousPrice !== null ? price - previousPrice : null;
-		const changePercent = change !== null ? (change / previousPrice) * 100 : null;
-		const direction = change === null ? null : change > 0 ? "up" : change < 0 ? "down" : "flat";
-		return { previousPrice, change, changePercent, direction };
-	}
-
 	if (cached) {
-		return { ...cached, ...buildDelta(cached.price), cached: true };
+		return { ...cached, cached: true };
 	}
 
 	const apiKey = process.env.TWELVE_DATA_API_KEY;
@@ -79,7 +68,7 @@ export async function fetchStockPrice({ symbol, apiSymbol, exchange, currency })
 	let response, data;
 	try {
 		response = await fetch(
-			`https://api.twelvedata.com/price?symbol=${apiSymbol}&apikey=${apiKey}`,
+			`https://api.twelvedata.com/quote?symbol=${apiSymbol}&apikey=${apiKey}`,
 			{ signal: controller.signal }
 		);
 		data = await response.json();
@@ -107,19 +96,22 @@ export async function fetchStockPrice({ symbol, apiSymbol, exchange, currency })
 		throw err;
 	}
 
-	const price = Number(data.price);
-	if (!data.price || isNaN(price)) {
+	const price = Number(data.close);
+	if (!data.close || isNaN(price)) {
 		const err = new Error("Invalid price received from upstream API");
 		err.status = 502;
 		err.code = "INVALID_PRICE";
 		throw err;
 	}
 
-	previousPrices.set(symbol, price);
+	const change = data.change != null ? Number(data.change) : null;
+	const changePercent = data.percent_change != null ? Number(data.percent_change) : null;
+	const previousPrice = data.previous_close != null ? Number(data.previous_close) : null;
+	const direction = change === null ? null : change > 0 ? "up" : change < 0 ? "down" : "flat";
 
-	const payload = { symbol, exchange, price, currency };
+	const payload = { symbol, exchange, price, currency, previousPrice, change, changePercent, direction };
 	cache.set(cacheKey, payload);
-	return { ...payload, ...buildDelta(price), cached: false };
+	return { ...payload, cached: false };
 }
 
 // Route handler helper
