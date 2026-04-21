@@ -51,8 +51,17 @@ export async function fetchStockPrice({ symbol, apiSymbol, exchange, currency })
 	const cacheKey = `stock:${symbol}`;
 	const cached = cache.get(cacheKey);
 
+	const previousPrice = previousPrices.get(symbol) ?? null;
+
+	function buildDelta(price) {
+		const change = previousPrice !== null ? price - previousPrice : null;
+		const changePercent = change !== null ? (change / previousPrice) * 100 : null;
+		const direction = change === null ? null : change > 0 ? "up" : change < 0 ? "down" : "flat";
+		return { previousPrice, change, changePercent, direction };
+	}
+
 	if (cached) {
-		return { ...cached, cached: true };
+		return { ...cached, ...buildDelta(cached.price), cached: true };
 	}
 
 	const apiKey = process.env.TWELVE_DATA_API_KEY;
@@ -106,15 +115,11 @@ export async function fetchStockPrice({ symbol, apiSymbol, exchange, currency })
 		throw err;
 	}
 
-	const previousPrice = previousPrices.get(symbol) ?? null;
-	const change = previousPrice !== null ? price - previousPrice : null;
-	const changePercent = change !== null ? (change / previousPrice) * 100 : null;
-	const direction = change === null ? null : change > 0 ? "up" : change < 0 ? "down" : "flat";
 	previousPrices.set(symbol, price);
 
-	const payload = { symbol, exchange, price, currency, previousPrice, change, changePercent, direction };
+	const payload = { symbol, exchange, price, currency };
 	cache.set(cacheKey, payload);
-	return { ...payload, cached: false };
+	return { ...payload, ...buildDelta(price), cached: false };
 }
 
 // Route handler helper
