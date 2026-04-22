@@ -17,7 +17,8 @@ npm run dev
 |---|---|---|
 | `PORT` | `3001` | Port to listen on |
 | `TWELVE_DATA_API_KEY` | *(required)* | Twelve Data API key |
-| `CORS_ORIGIN` | `http://localhost:3001` | Comma-separated allowed origins |
+| `CORS_ORIGIN_PROD` | — | Allowed origin for production (e.g. `https://example.com`) |
+| `CORS_ORIGIN_TEST` | — | Allowed origin for testing (e.g. `http://localhost:5173`) |
 | `CACHE_TTL` | `30` | Cache TTL in seconds |
 | `RATE_LIMIT_WINDOW_MS` | `60000` | Rate limit window in ms |
 | `RATE_LIMIT_MAX` | `30` | Max requests per window per IP |
