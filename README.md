@@ -45,7 +45,17 @@ Returns the current price for **TSTL** (Tissue Regenix, LSE).
 ### `GET /api/v1/test`
 Returns the current price for **NVDA** (NVIDIA, NASDAQ).
 ```json
-{"symbol":"TSTL","exchange":"LSE","price":378.06601,"currency":"GBP","previousPrice":378.06601,"change":0,"changePercent":0,"direction":"flat","cached":true}
+{
+  "symbol": "TSTL",
+  "exchange": "LSE",
+  "price": 380,
+  "currency": "GBP",
+  "previousPrice": 387.5,
+  "change": -7.5,
+  "changePercent": -1.93548,
+  "direction": "down",
+  "cached": true
+}
 ```
 
 The `cached` field is `true` when the response was served from cache (30-second TTL by default).
