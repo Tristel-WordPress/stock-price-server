@@ -114,6 +114,77 @@ export async function fetchStockPrice({ symbol, apiSymbol, exchange, currency })
 	return { ...payload, cached: false };
 }
 
+/**
+ * Fetches stock price history from Twelve Data with caching.
+ * @param {{ symbol: string, apiSymbol: string, interval?: string, outputsize?: number }} opts
+ */
+export async function fetchStockHistory({ symbol, apiSymbol, interval = "1day", outputsize = 30 }) {
+	const cacheKey = `history:${symbol}:${interval}`;
+	const cached = cache.get(cacheKey);
+
+	if (cached) {
+		return { ...cached, cached: true };
+	}
+
+	const apiKey = process.env.TWELVE_DATA_API_KEY;
+
+	if (!apiKey) {
+		const err = new Error("Missing TWELVE_DATA_API_KEY");
+		err.status = 500;
+		err.code = "MISSING_API_KEY";
+		throw err;
+	}
+
+	const controller = new AbortController();
+	const timeout = setTimeout(() => controller.abort(), 5000);
+
+	let response, data;
+	try {
+		response = await fetch(
+			`https://api.twelvedata.com/time_series?symbol=${apiSymbol}&interval=${interval}&outputsize=${outputsize}&apikey=${apiKey}`,
+			{ signal: controller.signal }
+		);
+		data = await response.json();
+	} catch (error) {
+		if (error.name === "AbortError") {
+			const err = new Error(`Upstream API request timed out for ${symbol}`);
+			err.status = 504;
+			err.code = "TIMEOUT";
+			throw err;
+		}
+		const err = new Error(`Network error fetching ${symbol}: ${error.cause?.message ?? error.message}`);
+		err.status = 502;
+		err.code = "NETWORK_ERROR";
+		throw err;
+	} finally {
+		clearTimeout(timeout);
+	}
+
+	if (!response.ok || data.status === "error") {
+		console.error(`Upstream error for ${symbol}:`, data);
+		const err = new Error(data.message || "Upstream API returned an error");
+		err.status = 502;
+		err.code = "UPSTREAM_ERROR";
+		err.upstream = { code: data.code, status: data.status };
+		throw err;
+	}
+
+	if (!Array.isArray(data.values) || data.values.length === 0) {
+		const err = new Error("No history data received from upstream API");
+		err.status = 502;
+		err.code = "INVALID_HISTORY";
+		throw err;
+	}
+
+	const values = data.values
+		.map(v => ({ datetime: v.datetime, close: Number(v.close) }))
+		.sort((a, b) => a.datetime.localeCompare(b.datetime));
+
+	const payload = { symbol, interval, values };
+	cache.set(cacheKey, payload);
+	return { ...payload, cached: false };
+}
+
 // Route handler helper
 function stockHandler(opts) {
 	return async (_req, res) => {
@@ -122,6 +193,25 @@ function stockHandler(opts) {
 			return res.json(result);
 		} catch (error) {
 			console.error(`Stock fetch error [${opts.symbol}]:`, error.message, { code: error.code, upstream: error.upstream });
+			const body = {
+				error: error.message || "Server error",
+				code: error.code || "INTERNAL_ERROR",
+				symbol: opts.symbol,
+				...(error.upstream && { upstream: error.upstream })
+			};
+			return res.status(error.status || 500).json(body);
+		}
+	};
+}
+
+function stockHistoryHandler(opts) {
+	return async (req, res) => {
+		const interval = req.query.interval || opts.interval || "1day";
+		try {
+			const result = await fetchStockHistory({ ...opts, interval });
+			return res.json(result);
+		} catch (error) {
+			console.error(`Stock history fetch error [${opts.symbol}]:`, error.message, { code: error.code, upstream: error.upstream });
 			const body = {
 				error: error.message || "Server error",
 				code: error.code || "INTERNAL_ERROR",
@@ -151,6 +241,15 @@ app.get("/api/v1/test", stockHandler({
 	apiSymbol: "NVDA",
 	exchange: "NASDAQ",
 	currency: "USD"
+}));
+
+/**
+ * Stock history: TSTL (LSE), supports ?interval= query param
+ */
+app.get("/api/v1/stock-history", stockHistoryHandler({
+	symbol: "TSTL",
+	apiSymbol: "TSTL:LSE",
+	interval: "1day"
 }));
 
 /**
