@@ -20,11 +20,16 @@ if (process.env.NODE_ENV !== 'production') {
 	process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '0';
 }
 
+const allowedOrigins = [
+	process.env.CORS_ORIGIN_PROD,
+	process.env.CORS_ORIGIN_TEST,
+].filter(Boolean);
+
 // Middleware
 app.use(helmet());
 app.use(
 	cors({
-		origin: process.env.CORS_ORIGIN?.split(",") || "http://localhost:3001"
+		origin: allowedOrigins.length > 0 ? allowedOrigins : "http://localhost:3001"
 	})
 );
 app.use(express.json({ limit: "10kb" }));
