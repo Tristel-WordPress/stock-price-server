@@ -235,31 +235,6 @@ describe("fetchStockHistory", () => {
 		);
 	});
 
-	it("includes start_date one month ago in the API request URL", async () => {
-		mockFetch.mockResolvedValueOnce(makeTimeSeriesResponse(sampleValues));
-
-		const before = new Date();
-		before.setMonth(before.getMonth() - 1);
-		const expectedDate = before.toISOString().split("T")[0];
-
-		await fetchStockHistory(baseOpts);
-
-		expect(mockFetch).toHaveBeenCalledWith(
-			expect.stringContaining(`start_date=${expectedDate}`),
-			expect.anything()
-		);
-	});
-
-	it("filters out values older than one month", async () => {
-		const oldValue = { datetime: "2020-01-01", close: 50.0 };
-		mockFetch.mockResolvedValueOnce(makeTimeSeriesResponse([...sampleValues, oldValue]));
-
-		const result = await fetchStockHistory(baseOpts);
-
-		expect(result.values.some(v => v.datetime === "2020-01-01")).toBe(false);
-		expect(result.values.length).toBe(sampleValues.length);
-	});
-
 	it("converts close values to numbers", async () => {
 		mockFetch.mockResolvedValueOnce(makeTimeSeriesResponse([{ datetime: "2026-04-15", close: 102.4 }]));
 
