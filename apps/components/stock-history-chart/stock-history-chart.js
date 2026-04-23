@@ -3,11 +3,16 @@ import PropTypes from "prop-types";
 import {Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis,} from "recharts";
 import "./stock-history-chart.scss";
 
+const formatUKDate = (dateStr) => {
+	const [year, month, day] = dateStr.split("-");
+	return `${day}/${month}/${year}`;
+};
+
 const ChartTooltip = ({ active, payload, label }) => {
 	if (!active || !payload?.length) return null;
 	return (
 		<div className="stock-history-chart__tooltip">
-			<p className="stock-history-chart__tooltip-label">{label}</p>
+			<p className="stock-history-chart__tooltip-label">{formatUKDate(label)}</p>
 			<p className="stock-history-chart__tooltip-price">
 				{Number(payload[0].value).toFixed(2)}
 			</p>
@@ -143,6 +148,7 @@ const StockHistoryChart = ({ apiBase }) => {
 						/>
 						<XAxis
 							dataKey="datetime"
+							tickFormatter={formatUKDate}
 							tick={{ fontSize: 11 }}
 							tickLine={false}
 						/>
