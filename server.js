@@ -123,7 +123,7 @@ export async function fetchStockPrice({ symbol, apiSymbol, exchange, currency })
  * Fetches stock price history from Twelve Data with caching.
  * @param {{ symbol: string, apiSymbol: string, interval?: string, outputsize?: number }} opts
  */
-export async function fetchStockHistory({ symbol, apiSymbol, interval = "1day", outputsize = 30 }) {
+export async function fetchStockHistory({ symbol, apiSymbol, interval = "1day", outputsize = 23 }) {
 	const cacheKey = `history:${symbol}:${interval}`;
 	const cached = cache.get(cacheKey);
 
@@ -140,17 +140,13 @@ export async function fetchStockHistory({ symbol, apiSymbol, interval = "1day", 
 		throw err;
 	}
 
-	const oneMonthAgo = new Date();
-	oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-	const start_date = oneMonthAgo.toISOString().split("T")[0];
-
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), 5000);
 
 	let response, data;
 	try {
 		response = await fetch(
-			`https://api.twelvedata.com/time_series?symbol=${apiSymbol}&interval=${interval}&start_date=${start_date}&outputsize=${outputsize}&apikey=${apiKey}`,
+			`https://api.twelvedata.com/time_series?symbol=${apiSymbol}&interval=${interval}&outputsize=${outputsize}&apikey=${apiKey}`,
 			{ signal: controller.signal }
 		);
 		data = await response.json();
@@ -187,7 +183,6 @@ export async function fetchStockHistory({ symbol, apiSymbol, interval = "1day", 
 
 	const values = data.values
 		.map(v => ({ datetime: v.datetime, close: Number(v.close) }))
-		.filter(v => v.datetime >= start_date)
 		.sort((a, b) => a.datetime.localeCompare(b.datetime));
 
 	const payload = { symbol, interval, values };
