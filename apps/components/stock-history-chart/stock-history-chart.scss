@@ -1,0 +1,165 @@
+@use "../../../scss/01-settings/abstracts" as abstract;
+@use "../../../scss/01-settings/colors" as color;
+@use "../../../scss/01-settings/measurements" as measurement;
+
+@keyframes shine {
+	to {
+		background-position-x: -200%;
+	}
+}
+
+.stock-history-chart {
+	padding: measurement.$universal-space;
+	background: color.$c-white;
+	border-radius: abstract.$border-radius;
+	box-shadow: abstract.$box-shadow;
+
+	&__header {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		flex-wrap: wrap;
+		gap: measurement.$universal-space-half;
+		margin-bottom: measurement.$universal-space;
+	}
+
+	&__title {
+		flex: 1;
+	}
+
+	&__symbol {
+		display: block;
+		font-size: 1.8rem;
+		font-weight: 700;
+		color: color.$c-black;
+	}
+
+	&__label {
+		display: block;
+		font-size: 1.2rem;
+		color: color.$c-light-gray;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		margin-top: 0.2rem;
+	}
+
+	&__intervals {
+		display: flex;
+		gap: 0.4rem;
+		flex-wrap: wrap;
+		align-items: center;
+	}
+
+	&__interval-btn {
+		padding: 0.3rem 0.9rem;
+		border-radius: abstract.$border-radius-full;
+		border: 1px solid color.$c-off-white;
+		background: color.$c-off-white;
+		font-size: 1.2rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: abstract.$link-transition;
+		color: color.$c-black;
+
+		&:hover {
+			border-color: color.$c-dark-green;
+			color: color.$c-dark-green;
+		}
+
+		&--active {
+			background: color.$c-dark-green;
+			border-color: color.$c-dark-green;
+			color: color.$c-white;
+
+			&:hover {
+				color: color.$c-white;
+			}
+		}
+	}
+
+	&__stats {
+		display: grid;
+		grid-template-columns: repeat(4, 1fr);
+		gap: measurement.$universal-space-half;
+		margin-bottom: measurement.$universal-space;
+
+		@media (max-width: 600px) {
+			grid-template-columns: repeat(2, 1fr);
+		}
+	}
+
+	&__stat {
+		background: color.$c-off-white;
+		border-radius: abstract.$border-radius;
+		padding: measurement.$universal-space-half measurement.$universal-space;
+	}
+
+	&__stat-label {
+		display: block;
+		font-size: 1.1rem;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: color.$c-light-gray;
+		margin-bottom: 0.3rem;
+	}
+
+	&__stat-value {
+		display: block;
+		font-size: 1.5rem;
+		font-weight: 700;
+		color: color.$c-black;
+
+		&--up {
+			color: color.$c-dark-green;
+		}
+
+		&--down {
+			color: color.$c-dark-pink;
+		}
+	}
+
+	&__chart-wrap {
+		width: 100%;
+		height: 320px;
+	}
+
+	&__skeleton {
+		width: 100%;
+		height: 520px;
+		background: linear-gradient(110deg, #ececec 8%, #f5f5f5 18%, #ececec 33%);
+		border-radius: abstract.$border-radius;
+		background-size: 200% 100%;
+		animation: 1s shine linear infinite;
+	}
+
+	&__error {
+		color: color.$c-pink;
+		font-size: 1.4rem;
+		padding: measurement.$universal-space 0;
+	}
+
+	&__tooltip {
+		background: color.$c-white;
+		border: 1px solid color.$c-off-white;
+		border-radius: abstract.$border-radius;
+		padding: measurement.$universal-space-half measurement.$universal-space;
+		font-size: 1.3rem;
+		color: color.$c-black;
+		box-shadow: abstract.$box-shadow;
+
+		p {
+			margin: 0;
+		}
+	}
+
+	&__tooltip-label {
+		color: color.$c-light-gray;
+		font-size: 1.1rem;
+		margin-bottom: 0.2rem;
+	}
+
+	&__tooltip-price {
+		font-weight: 700;
+		font-size: 1.4rem;
+	}
+}
