@@ -123,7 +123,7 @@ export async function fetchStockPrice({ symbol, apiSymbol, exchange, currency })
  * Fetches stock price history from Twelve Data with caching.
  * @param {{ symbol: string, apiSymbol: string, interval?: string, outputsize?: number }} opts
  */
-export async function fetchStockHistory({ symbol, apiSymbol, interval = "1day", outputsize = 30 }) {
+export async function fetchStockHistory({ symbol, apiSymbol, interval = "1day", outputsize = 23 }) {
 	const cacheKey = `history:${symbol}:${interval}`;
 	const cached = cache.get(cacheKey);
 
