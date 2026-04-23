@@ -31,7 +31,7 @@ const StockHistoryChart = ({ apiBase }) => {
 		setError(null);
 		async function fetchHistory() {
 			try {
-				const url = `${apiBase}/api/v1/stock-history?interval=1month`;
+				const url = `${apiBase}/api/v1/stock-history?interval=1day`;
 				const response = await fetch(url);
 				if (!response.ok) {
 					throw new Error("Failed to fetch stock history.");
