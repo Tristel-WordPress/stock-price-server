@@ -58,13 +58,13 @@ describe("fetchStockPrice", () => {
 		});
 	});
 
-	it("calls the /quote endpoint", async () => {
+	it("calls the /quote endpoint with interval=1h", async () => {
 		mockFetch.mockResolvedValueOnce(makeQuoteResponse("99.00", "1.00", "1.02", "98.00"));
 
 		await fetchStockPrice({ symbol: "TSTL", apiSymbol: "TSTL:LSE", exchange: "LSE", currency: "GBP" });
 
 		expect(mockFetch).toHaveBeenCalledWith(
-			expect.stringContaining("twelvedata.com/quote"),
+			expect.stringMatching(/twelvedata\.com\/quote.*interval=1h|interval=1h.*twelvedata\.com\/quote/),
 			expect.anything()
 		);
 	});

@@ -69,11 +69,11 @@ export async function fetchStockPrice({ symbol, apiSymbol, exchange, currency })
 
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), 5000);
-//https://api.twelvedata.com/time_series?apikey=26b44f3093484dfc87b3cf1421df9e63&symbol=TSTL&interval=1h&previous_close=true
+
 	let response, data;
 	try {
 		response = await fetch(
-			`https://api.twelvedata.com/time_series?symbol=${apiSymbol}&apikey=${apiKey}&previous_close=true`,
+			`https://api.twelvedata.com/quote?symbol=${apiSymbol}&interval=1h&apikey=${apiKey}`,
 			{ signal: controller.signal }
 		);
 		data = await response.json();
@@ -109,9 +109,9 @@ export async function fetchStockPrice({ symbol, apiSymbol, exchange, currency })
 		throw err;
 	}
 
+	const previousPrice = data.previous_close != null ? Number(data.previous_close) : null;
 	const change = data.change != null ? Number(data.change) : null;
 	const changePercent = data.percent_change != null ? Number(data.percent_change) : null;
-	const previousPrice = data.previous_close != null ? Number(data.previous_close) : null;
 	const direction = change === null ? null : change > 0 ? "up" : change < 0 ? "down" : "flat";
 
 	const payload = { symbol, exchange, price, currency, previousPrice, change, changePercent, direction };
