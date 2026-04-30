@@ -3,16 +3,18 @@ import PropTypes from "prop-types";
 import {Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis,} from "recharts";
 import "./stock-history-chart.scss";
 
-const formatUKDate = (dateStr) => {
-	const [year, month, day] = dateStr.split("-");
-	return `${day}/${month}/${year}`;
+const formatTime = (datetimeStr) => {
+	if (!datetimeStr) return "";
+	const sep = datetimeStr.includes("T") ? "T" : " ";
+	const timePart = datetimeStr.split(sep)[1] || datetimeStr;
+	return timePart.substring(0, 5);
 };
 
 const ChartTooltip = ({ active, payload, label }) => {
 	if (!active || !payload?.length) return null;
 	return (
 		<div className="stock-history-chart__tooltip">
-			<p className="stock-history-chart__tooltip-label">{formatUKDate(label)}</p>
+			<p className="stock-history-chart__tooltip-label">{formatTime(label)}</p>
 			<p className="stock-history-chart__tooltip-price">
 				{Number(payload[0].value).toFixed(2)}
 			</p>
@@ -36,7 +38,7 @@ const StockHistoryChart = ({ apiBase }) => {
 		setError(null);
 		async function fetchHistory() {
 			try {
-				const url = `${apiBase}/api/v1/stock-history?interval=1day&outputsize=30`;
+				const url = `${apiBase}/api/v1/stock-history?interval=1h&outputsize=24`;
 				const response = await fetch(url);
 				if (!response.ok) {
 					throw new Error("Failed to fetch stock history.");
@@ -104,7 +106,7 @@ const StockHistoryChart = ({ apiBase }) => {
 					</span>
 				</div>
 				<div className="stock-history-chart__stat">
-					<span className="stock-history-chart__stat-label">Period Change</span>
+					<span className="stock-history-chart__stat-label">24H Change</span>
 					<span
 						className={`stock-history-chart__stat-value stock-history-chart__stat-value--${
 							isUp ? "up" : "down"
@@ -148,7 +150,7 @@ const StockHistoryChart = ({ apiBase }) => {
 						/>
 						<XAxis
 							dataKey="datetime"
-							tickFormatter={formatUKDate}
+							tickFormatter={formatTime}
 							tick={{ fontSize: 11 }}
 							tickLine={false}
 						/>
