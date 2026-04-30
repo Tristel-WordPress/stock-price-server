@@ -73,7 +73,7 @@ export async function fetchStockPrice({ symbol, apiSymbol, exchange, currency })
 	let response, data;
 	try {
 		response = await fetch(
-			`https://api.twelvedata.com/quote?symbol=${apiSymbol}&apikey=${apiKey}`,
+			`https://api.twelvedata.com/time_series?symbol=${apiSymbol}&apikey=${apiKey}&previous_close=true`,
 			{ signal: controller.signal }
 		);
 		data = await response.json();
