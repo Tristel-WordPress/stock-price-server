@@ -1,57 +1,21 @@
 import { useEffect, useState } from "react";
-import PropTypes from "prop-types";
 import "./stock-info-component.scss";
 
 const API_BASE = "https://stock-price-server-production.up.railway.app";
 
-const formatTime = (datetimeStr) => {
-	if (!datetimeStr) return "";
-	const sep = datetimeStr.includes("T") ? "T" : " ";
-	const timePart = datetimeStr.split(sep)[1] || datetimeStr;
-	return timePart.substring(0, 5);
-};
-
-const MiniTooltip = ({ active, payload, label }) => {
-	if (!active || !payload?.length) return null;
-	return (
-		<div className="stock-info-component__mini-tooltip">
-			<p>{label ? formatTime(label) : ""}</p>
-			<p>{Number(payload[0].value).toFixed(2)}</p>
-		</div>
-	);
-};
-
-MiniTooltip.propTypes = {
-	active: PropTypes.bool,
-	payload: PropTypes.array,
-	label: PropTypes.string,
-};
-
 const StockInfoComponent = () => {
 	const [data, setData] = useState(null);
-	const [chartData, setChartData] = useState(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState(null);
 
 	useEffect(() => {
 		async function fetchStockInfo() {
 			try {
-				const [priceRes, historyRes] = await Promise.all([
-					fetch(`${API_BASE}/api/v1/stock-price`),
-					fetch(`${API_BASE}/api/v1/stock-history?interval=1h&outputsize=24`),
-				]);
-
-				if (!priceRes.ok) {
+				const res = await fetch(`${API_BASE}/api/v1/stock-price`);
+				if (!res.ok) {
 					throw new Error("Failed to fetch stock data.");
 				}
-
-				const priceData = await priceRes.json();
-				setData(priceData);
-
-				if (historyRes.ok) {
-					const historyData = await historyRes.json();
-					setChartData(historyData.values || null);
-				}
+				setData(await res.json());
 			} catch (err) {
 				setError(err.message);
 			} finally {
@@ -86,13 +50,6 @@ const StockInfoComponent = () => {
 				: "natural";
 	const changeSign = direction === "up" ? "+" : "";
 	const changePercentFormatted = data.changePercent.toFixed(2);
-
-	const chartColor =
-		direction === "up"
-			? "#008375"
-			: direction === "down"
-				? "#820040"
-				: "#333333";
 
 	return (
 		<div className="stock-info-component">
